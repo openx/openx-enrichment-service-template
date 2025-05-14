@@ -1,0 +1,9 @@
+.git
+.gitignore
+README.md
+*.log
+.env
+.vscode
+.idea
+*.swp
+*.swo 

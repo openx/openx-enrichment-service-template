@@ -1,0 +1,18 @@
+services:
+  enrichment-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8082:8080"
+    environment:
+      - PORT=8080
+      - LOG_LEVEL=debug
+      - SIMULATE_LATENCY=true
+      - LATENCY_MEAN_MS=5
+      - LATENCY_STDDEV_MS=5
+      - SIMULATE_CPU_LOAD=true
+      - CPU_LOAD_PERCENTAGE=50
+      - GOOGLE_APPLICATION_CREDENTIALS=/gcp/creds.json
+    volumes:
+      - ~/.config/gcloud/application_default_credentials.json:/gcp/creds.json:ro
