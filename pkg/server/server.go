@@ -162,15 +162,10 @@ func (s *Server) exampleEnrichmentLogic(_ context.Context, request openrtb.Enric
 	// Simulate load (latency and/or CPU)
 	s.simulateLoad()
 
-	// Create response matching the API docs example
-	return &openrtb.EnrichmentResponse{
-		ID: request.ID,
-		Imp: []openrtb2.Imp{
-			{
-				BidFloor: 0.75,
-			},
-		},
-		User: &openrtb2.User{
+	// Create response with only allowed fields
+	resp := openrtb.EnrichmentResponse{
+		ID: request.ID, // Preserve the request ID
+		User: &openrtb.EnrichmentUser{
 			Data: []openrtb2.Data{
 				{
 					Name: "segment-provider.com",
@@ -179,13 +174,19 @@ func (s *Server) exampleEnrichmentLogic(_ context.Context, request openrtb.Enric
 					},
 				},
 			},
-			Ext: json.RawMessage(`{
-				"eids": [
-					{"source": "id-provider.com", "uids": [{"id": "abc"}]}
-				]
-			}`),
+			Ext: &openrtb.EnrichmentExt{
+				EIDs: []openrtb2.EID{
+					{
+						Source: "id-provider.com",
+						UIDs: []openrtb2.UID{
+							{ID: "abc"},
+						},
+					},
+				},
+			},
 		},
-	}, nil
+	}
+	return &resp, nil
 }
 
 func (s *Server) handleEnrichment(w http.ResponseWriter, r *http.Request) {

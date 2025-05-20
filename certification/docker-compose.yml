@@ -1,0 +1,10 @@
+services:
+  k6:
+    image: grafana/k6:latest
+    volumes:
+      - ./k6:/scripts
+    environment:
+      - TARGET_HOST=${TARGET_HOST:-localhost}
+      - TARGET_PORT=${TARGET_PORT:-8080}
+      - USE_HTTPS=${USE_HTTPS:-false}
+    command: run /scripts/openrtb.js 

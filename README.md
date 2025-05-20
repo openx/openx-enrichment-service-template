@@ -9,6 +9,7 @@ This is a reference implementation of an enrichment service that follows the [Op
 - Exposes health check endpoint at `/healthz`
 - Exposes Prometheus metrics at `/metrics`
 - Follows OpenX's standard patterns for metrics, logging, and configuration
+- Includes a certification suite to validate implementations
 
 ## Configuration
 
@@ -135,3 +136,34 @@ When deployed to Kubernetes, the service will use workload identity for GCS auth
 ## API Documentation
 
 For a full description of the request/response format, required endpoints, and runtime expectations, see the [OpenX Enrichment Service Specification](SPECIFICATION.md).
+
+## Certification Suite
+
+The repository includes a certification suite to validate that your implementation meets OpenX's requirements. The suite uses k6 for load testing and validation.
+
+### Running the Certification Suite
+
+1. Against a local service based on this reference implementation:
+   ```bash
+   make cert
+   ```
+
+2. Against a remote service:
+   ```bash
+   make cert-remote CERT_HOST=your-service-host CERT_PORT=your-service-port
+   ```
+
+3. Against a service using HTTPS:
+   ```bash
+   make cert-remote CERT_HOST=your-service-host CERT_PORT=443 USE_HTTPS=true
+   ```
+
+The certification suite validates:
+- Response codes and structure
+- Performance requirements (latency thresholds)
+- Response format compliance
+- Basic error handling
+
+Note: The load test targets 1000 requests per second for the `/openrtb25` endpoint. This is intended to be a moderate load suitable for testing on a developer's machine, before deploying to a distributed Kubernetes environment with auto-scaling.
+
+For more details about the certification suite, see the [certification README](certification/README.md).

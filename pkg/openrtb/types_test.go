@@ -45,10 +45,9 @@ func TestEnrichmentRequest(t *testing.T) {
 }
 
 func TestEnrichmentResponse(t *testing.T) {
-	// Test that EnrichmentResponse is compatible with OpenRTB 2.5 BidRequest
 	response := EnrichmentResponse{
 		ID: "test-id",
-		User: &openrtb2.User{
+		User: &EnrichmentUser{
 			Data: []openrtb2.Data{
 				{
 					Name: "segment-provider.com",
@@ -60,25 +59,6 @@ func TestEnrichmentResponse(t *testing.T) {
 		},
 	}
 
-	// Test conversion to OpenRTB BidRequest
-	openrtbRequest := openrtb2.BidRequest(response)
-	assert.Equal(t, response.ID, openrtbRequest.ID)
-	assert.NotNil(t, openrtbRequest.User)
-	assert.Len(t, openrtbRequest.User.Data, 1)
-	assert.Equal(t, response.User.Data[0].Name, openrtbRequest.User.Data[0].Name)
-	assert.Len(t, openrtbRequest.User.Data[0].Segment, 1)
-	assert.Equal(t, response.User.Data[0].Segment[0].ID, openrtbRequest.User.Data[0].Segment[0].ID)
-
-	// Test conversion from OpenRTB BidRequest
-	convertedResponse := EnrichmentResponse(openrtbRequest)
-	assert.Equal(t, response.ID, convertedResponse.ID)
-	assert.NotNil(t, convertedResponse.User)
-	assert.Len(t, convertedResponse.User.Data, 1)
-	assert.Equal(t, response.User.Data[0].Name, convertedResponse.User.Data[0].Name)
-	assert.Len(t, convertedResponse.User.Data[0].Segment, 1)
-	assert.Equal(t, response.User.Data[0].Segment[0].ID, convertedResponse.User.Data[0].Segment[0].ID)
-
-	// Test JSON marshaling/unmarshaling
 	data, err := json.Marshal(response)
 	assert.NoError(t, err)
 
