@@ -1,4 +1,4 @@
-module openx-enrichment-service-template
+module github.com/openx/openx-enrichment-service-template
 
 go 1.24
 

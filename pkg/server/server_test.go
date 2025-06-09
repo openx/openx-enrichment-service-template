@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"openx-enrichment-service-template/pkg/config"
-	"openx-enrichment-service-template/pkg/metrics"
-	"openx-enrichment-service-template/pkg/openrtb"
+	"github.com/openx/openx-enrichment-service-template/pkg/config"
+	"github.com/openx/openx-enrichment-service-template/pkg/metrics"
+	"github.com/openx/openx-enrichment-service-template/pkg/openrtb"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

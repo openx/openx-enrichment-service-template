@@ -6,8 +6,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"openx-enrichment-service-template/pkg/config"
-	"openx-enrichment-service-template/pkg/server"
+	"github.com/openx/openx-enrichment-service-template/pkg/config"
+	"github.com/openx/openx-enrichment-service-template/pkg/server"
 
 	"go.uber.org/zap"
 )

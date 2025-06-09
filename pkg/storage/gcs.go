@@ -4,7 +4,7 @@ import (
 	"context"
 	"io"
 
-	"openx-enrichment-service-template/pkg/config"
+	"github.com/openx/openx-enrichment-service-template/pkg/config"
 
 	"cloud.google.com/go/storage"
 	"go.uber.org/zap"

@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"openx-enrichment-service-template/pkg/config"
-	"openx-enrichment-service-template/pkg/metrics"
-	"openx-enrichment-service-template/pkg/openrtb"
-	"openx-enrichment-service-template/pkg/storage"
+	"github.com/openx/openx-enrichment-service-template/pkg/config"
+	"github.com/openx/openx-enrichment-service-template/pkg/metrics"
+	"github.com/openx/openx-enrichment-service-template/pkg/openrtb"
+	"github.com/openx/openx-enrichment-service-template/pkg/storage"
 
 	"github.com/prebid/openrtb/v20/openrtb2"
 	"go.uber.org/zap"

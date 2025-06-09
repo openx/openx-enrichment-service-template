@@ -71,7 +71,7 @@ deps:
 	go mod tidy
 
 # All (format, lint, test, build)
-all: fmt lint test build
+all: fmt lint test build 
 
 # Run certification suite against local service
 cert-local: stop-service docker-run
