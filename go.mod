@@ -1,6 +1,6 @@
 module github.com/openx/openx-enrichment-service-template
 
-go 1.24
+go 1.23
 
 require (
 	github.com/prebid/openrtb/v20 v20.3.0
