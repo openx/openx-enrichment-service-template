@@ -24,6 +24,12 @@ type Config struct {
 	// GCS configuration
 	GCSInboxBucket string
 	GCSCredentials string // Path to credentials file or "default" for workload identity
+
+	// Logging configuration
+	RequestLogThrottle float64 // Fraction of requests to log (0.0 to 1.0)
+
+	// Service behavior
+	DisableEnrichment bool // If true, always return 204 No Content
 }
 
 // DefaultConfig returns the default configuration
@@ -43,6 +49,9 @@ func DefaultConfig() *Config {
 
 		GCSInboxBucket: "",
 		GCSCredentials: "default", // Default to workload identity
+
+		RequestLogThrottle: 0.0,   // Log no requests by default
+		DisableEnrichment:  false, // By default, perform enrichment
 	}
 }
 
@@ -93,6 +102,16 @@ func LoadFromEnv() *Config {
 
 	if credentials := os.Getenv("GCS_CREDENTIALS"); credentials != "" {
 		config.GCSCredentials = credentials
+	}
+
+	if requestLogThrottle := os.Getenv("REQUEST_LOG_THROTTLE"); requestLogThrottle != "" {
+		if throttle, err := strconv.ParseFloat(requestLogThrottle, 64); err == nil {
+			config.RequestLogThrottle = throttle
+		}
+	}
+
+	if disableEnrichment := os.Getenv("DISABLE_ENRICHMENT"); disableEnrichment != "" {
+		config.DisableEnrichment = disableEnrichment == "true"
 	}
 
 	return config

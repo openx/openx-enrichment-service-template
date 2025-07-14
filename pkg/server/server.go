@@ -189,6 +189,18 @@ func (s *Server) exampleEnrichmentLogic(_ context.Context, request openrtb.Enric
 	return &resp, nil
 }
 
+// logRequest logs the OpenRTB request if it passes the throttling check
+func (s *Server) logRequest(request openrtb.EnrichmentRequest) {
+	// Use random sampling based on the throttle rate
+	if s.rand.Float64() < s.config.RequestLogThrottle {
+		s.logger.Debug("OpenRTB request",
+			zap.String("request_id", request.ID),
+			zap.Any("request", request),
+			zap.String("type", "openrtb_request"),
+		)
+	}
+}
+
 func (s *Server) handleEnrichment(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 	defer func() {
@@ -229,6 +241,15 @@ func (s *Server) handleEnrichment(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		metrics.EnrichmentRequestErrors.WithLabelValues("invalid_request").Inc()
+		return
+	}
+
+	// Log the request if it passes throttling
+	s.logRequest(request)
+
+	// If enrichment is disabled, return 204 No Content
+	if s.config.DisableEnrichment {
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 

@@ -38,6 +38,15 @@ These environment variables are used in this example service, for testing and lo
 - `SIMULATE_CPU_LOAD`: Enable CPU load simulation (default: false)
 - `CPU_LOAD_PERCENTAGE`: Percentage of CPU to use (default: 50)
 
+#### Request Logging
+- `REQUEST_LOG_THROTTLE`: Fraction of requests to log (0.0 to 1.0, default: 0.0)
+  - Set to 0.01 to log 1% of requests
+  - Set to 1.0 to log all requests
+  - Set to 0.0 to disable request logging (default)
+
+#### Service Behavior
+- `DISABLE_ENRICHMENT`: If set to "true", always return 204 No Content (default: false)
+
 ## Local Development
 
 For local development, we use Docker Compose to run the service with a standard configuration. The `docker-compose.yml` file includes:
@@ -64,6 +73,12 @@ To modify the default configuration, you can:
          - LATENCY_STDDEV_MS=5
          - SIMULATE_CPU_LOAD=true
          - CPU_LOAD_PERCENTAGE=50
+         
+         # Configure request logging
+         - REQUEST_LOG_THROTTLE=0.01
+         
+         # Disable enrichment responses
+         - DISABLE_ENRICHMENT=true
          
          # Change logging level
          - LOG_LEVEL=debug
@@ -125,6 +140,8 @@ docker run -p 8082:8080 \
   -e LATENCY_STDDEV_MS=5 \
   -e SIMULATE_CPU_LOAD=true \
   -e CPU_LOAD_PERCENTAGE=50 \
+  -e REQUEST_LOG_THROTTLE=0.01 \
+  -e DISABLE_ENRICHMENT=true \
   -e LOG_LEVEL=debug \
   your-registry.com/openx-enrichment-service-template:1.0.0
 ```

@@ -39,27 +39,48 @@ A reference implementation is available at https://github.com/openx/openx-enrich
 
 The fields currently available are:
 
+* `device.devicetype`
 * `device.dnt`  
-* `device.ip`  
-* `device.ipv6`  
+* `device.language`
+* `device.lmt`
 * `device.ua`  
 * `device.ext.sua`  
 * `device.h`  
 * `device.w`  
 * `device.geo.country`  
+* `device.geo.region`
+* `device.geo.type`
+* `device.geo.metro`
+* `device.geo.city`
+* `device.geo.zip`
 * `imp.banner` (only for Banner media type, contents will be empty but reserved for future use)  
 * `imp.video` (only for Video media type, contents will be empty but reserved for future use)  
 * `imp.native` (only for Native media type, contents will be empty but reserved for future use)  
+* `imp.tagid`
+* `imp.ext.gpid`
 * `regs.gdpr`  
 * `regs.us_privacy`  
 * `regs.gpp`  
 * `regs.gpp_sid`  
 * `regs.coppa`  
+* `site.domain`
+* `site.cat`
 * `site.page`  
+* `app.bundle`
+* `app.content.language`
+* `app.content.url`
+* `app.content.contentrating`
+* `app.content.genre`
+* `app.domain`
+* `app.storeurl`
+* `app.cat`
+* `app.publisher.id`
+* `app.publisher.cat`
 * `user.consent`  
 * `user.ext.eids` (only where the `source` is authorized to be consumed by your service)
+* `source.ext.schain`
 
-We will partner with you to identify the subset of fields being sent to your service and identify additional fields that could improve your response accuracy.
+We will partner with you to identify the set of fields being sent to your service and identify additional fields that could improve your response accuracy.
 
 Example Request:
 
@@ -77,7 +98,6 @@ Example Request:
       "country": "US"
     },
     "dnt": 0,
-    "ip": "192.168.2.123",
     "ua": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Mobile Safari/537.36"
   },
   "site": {

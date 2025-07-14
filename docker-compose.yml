@@ -13,6 +13,8 @@ services:
       - LATENCY_STDDEV_MS=5
       - SIMULATE_CPU_LOAD=true
       - CPU_LOAD_PERCENTAGE=50
+      - REQUEST_LOG_THROTTLE=0.0
+      - DISABLE_ENRICHMENT=false
       - GOOGLE_APPLICATION_CREDENTIALS=/gcp/creds.json
     volumes:
       - ~/.config/gcloud/application_default_credentials.json:/gcp/creds.json:ro
