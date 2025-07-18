@@ -1,6 +1,6 @@
 module github.com/openx/openx-enrichment-service-template
 
-go 1.23
+go 1.23.0
 
 require (
 	github.com/prebid/openrtb/v20 v20.3.0
@@ -45,7 +45,7 @@ require (
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/crypto v0.22.0 // indirect
 	golang.org/x/net v0.24.0 // indirect
-	golang.org/x/oauth2 v0.19.0 // indirect
+	golang.org/x/oauth2 v0.27.0 // indirect
 	golang.org/x/sync v0.7.0 // indirect
 	golang.org/x/sys v0.19.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
