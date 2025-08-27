@@ -58,10 +58,10 @@ The fields currently available are:
 * `imp.native` (only for Native media type, contents will be empty but reserved for future use)  
 * `imp.tagid`
 * `imp.ext.gpid`
-* `regs.gdpr`  
-* `regs.us_privacy`  
-* `regs.gpp`  
-* `regs.gpp_sid`  
+* `regs.ext.gdpr`  
+* `regs.ext.us_privacy`  
+* `regs.ext.gpp`  
+* `regs.ext.gpp_sid`  
 * `regs.coppa`  
 * `site.domain`
 * `site.cat`
@@ -77,8 +77,8 @@ The fields currently available are:
 * `app.publisher.id`
 * `app.publisher.cat`
 * `user.consent`  
-* `user.ext.eids` (only where the `source` is authorized to be consumed by your service)
-* `source.ext.schain`
+* `user.ext.eids.*` (only where the `source` is authorized to be consumed by your service)
+* `source.ext.schain.*`
 
 We will partner with you to identify the set of fields being sent to your service and identify additional fields that could improve your response accuracy.
 
@@ -115,6 +115,7 @@ Example Request:
 
 #### **Response**
 
+* Content-Type: `application/json`
 * Body: A fragment of a `BidRequest`\-compatible object  
 * Additions to the BidRequest object will be validated and merged back into the original `BidRequest`
 
@@ -200,6 +201,7 @@ These environment variables are automatically set by OpenX in a hosted deploymen
 ### **Observability**
 
 * Logs must be written in plaintext to stdout/stderr, must not include any sensitive or personally-identifying information, and are subject to audit and redaction  
+** **Important:** None of the data from inbound BidRequest objects may be included in logs without prior approval. Exceptions will be made for limited logging of exceptions/errors with BidRequest details.
 * `/metrics` endpoint is optional but encouraged
 
 ---

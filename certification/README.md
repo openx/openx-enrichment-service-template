@@ -7,6 +7,12 @@ This directory contains a test suite to validate implementations of the OpenX En
 - Docker
 - Docker Compose
 
+## Test Data
+
+The certification suite includes **sample test data** (`openrtb_1000.jsonl`) containing 1,000 realistic OpenRTB bid
+requests.  Most values are randomly generated and will therefore not resemble real geographic locations or domains, but
+can be useful for testing OpenRTB JSON handling.
+
 ## Running the Tests
 
 ### Testing a Local Service
@@ -76,7 +82,8 @@ The suite includes the following test scenarios:
 - Validates the `/openrtb25` endpoint
 - Checks response time < 5ms p95 (as per spec)
 - Verifies response structure and allowed fields
-- Tests with synthetic bid requests
+- Uses sample test data when available (70% of requests)
+- Tests with synthetic bid requests for edge cases
 - Includes periodic health checks (`/healthz`) to monitor service availability
   - Verifies 200 OK response
   - Checks response time < 100ms p95

@@ -3,15 +3,32 @@ import { check, sleep } from 'k6';
 import { randomString } from 'https://jslib.k6.io/k6-utils/1.2.0/index.js';
 import { Trend } from 'k6/metrics';
 
+
 const TARGET_HOST = __ENV.TARGET_HOST || 'localhost';
 const TARGET_PORT = __ENV.TARGET_PORT || '8080';
 const USE_HTTPS = __ENV.USE_HTTPS === 'true';
+const VERBOSE = __ENV.VERBOSE === 'true';
 const PROTOCOL = USE_HTTPS ? 'https' : 'http';
 const BASE_URL = `${PROTOCOL}://${TARGET_HOST}:${TARGET_PORT}`;
 
 // Custom metrics
 const openrtbTrend = new Trend('openrtb_duration');
 const healthTrend = new Trend('health_duration');
+
+// Try to load sample redacted test data, fall back to synthetic data
+let sampleTestData = null;
+try {
+  // Load JSONL data (one JSON object per line)
+  const data = open('./openrtb_1000.jsonl');
+  const lines = data.trim().split('\n');
+  sampleTestData = lines.map(line => JSON.parse(line));
+  if (VERBOSE) {
+    console.log(`Loaded ${sampleTestData.length} sample test requests`);
+  }
+} catch (e) {
+  console.log('Sample test data not available, using synthetic data');
+  console.log('Error loading sample data:', e.message);
+}
 
 export const options = {
   scenarios: {
@@ -211,9 +228,25 @@ function checkHealth() {
 }
 
 function checkOpenRTB() {
-  // Randomly select a variation or use the valid request
-  const variations = Object.values(bidRequestVariations);
-  const request = Math.random() < 0.7 ? validBidRequest : variations[Math.floor(Math.random() * variations.length)];
+  // Use sample data for 70% of requests, fall back to synthetic data for 30%
+  let request;
+  let dataSource = '';
+  if (sampleTestData && Math.random() < 0.7) {
+    // Use a random sample from the loaded data
+    const randomIndex = Math.floor(Math.random() * sampleTestData.length);
+    request = sampleTestData[randomIndex];
+    dataSource = 'sample';
+  } else {
+    // Fall back to synthetic data
+    const variations = Object.values(bidRequestVariations);
+    request = Math.random() < 0.5 ? validBidRequest : variations[Math.floor(Math.random() * variations.length)];
+    dataSource = 'synthetic';
+  }
+
+  // Log which data source we're using (for debugging)
+  if (VERBOSE) {
+    console.log(`Using ${dataSource} data for request ID: ${request.id}`);
+  }
 
   const res = http.post(`${BASE_URL}/openrtb25`, JSON.stringify(request), {
     headers: { 'Content-Type': 'application/json' },

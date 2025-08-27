@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"hash/fnv"
 	"math/rand"
 	"net/http"
 	"strings"
@@ -15,16 +14,15 @@ import (
 	"github.com/openx/openx-enrichment-service-template/pkg/openrtb"
 	"github.com/openx/openx-enrichment-service-template/pkg/storage"
 
-	"github.com/prebid/openrtb/v20/openrtb2"
 	"go.uber.org/zap"
 )
 
 // Server represents the HTTP server
 type Server struct {
-	config *config.Config
-	logger *zap.Logger
-	rand   *rand.Rand
-	gcs    *storage.Client
+	config   *config.Config
+	logger   *zap.Logger
+	gcs      *storage.Client
+	analyzer *RequestAnalyzer
 }
 
 // New creates a new server instance
@@ -46,10 +44,10 @@ func New(config *config.Config, logger *zap.Logger) (*Server, error) {
 	}
 
 	return &Server{
-		config: config,
-		logger: logger,
-		rand:   rand.New(rand.NewSource(time.Now().UnixNano())),
-		gcs:    gcsClient,
+		config:   config,
+		logger:   logger,
+		gcs:      gcsClient,
+		analyzer: NewRequestAnalyzer(logger),
 	}, nil
 }
 
@@ -106,99 +104,23 @@ func (s *Server) testGCSAccess(ctx context.Context) error {
 	return nil
 }
 
-// simulateLoad adds both latency and CPU load, ensuring CPU load is part of the total latency
-func (s *Server) simulateLoad() {
-	if !s.config.SimulateLatency && !s.config.SimulateCPULoad {
-		s.logger.Debug("No load simulation enabled")
-		return
-	}
-
-	// Calculate target latency
-	targetLatency := time.Duration(0)
-	if s.config.SimulateLatency {
-		targetLatency = max(0,
-			time.Duration(s.rand.NormFloat64()*float64(s.config.LatencyStdDevMs)+
-				float64(s.config.LatencyMeanMs))*time.Millisecond)
-	}
-
-	// Calculate CPU load duration as a portion of the total latency
-	cpuLoadDuration := time.Duration(0)
-	if s.config.SimulateCPULoad && targetLatency > 0 {
-		cpuLoadDuration = time.Duration(float64(s.config.CPULoadPercentage)/100.0*float64(targetLatency.Milliseconds())) * time.Millisecond
-	}
-
-	// Busy-wait to simulate CPU load for the calculated duration
-	cpuStart := time.Now()
-	for time.Since(cpuStart) < cpuLoadDuration {
-		// Do actual CPU work by computing a hash
-		hash := fnv.New64()
-		hash.Write([]byte(time.Now().String()))
-		_ = hash.Sum64()
-	}
-
-	latencyStart := time.Now()
-	// Sleep for the remaining time to reach target latency
-	remainingTime := targetLatency - time.Since(cpuStart)
-	if remainingTime > 0 {
-		time.Sleep(remainingTime)
-	}
-
-	now := time.Now()
-	s.logger.Debug("Simulated load",
-		zap.Duration("targetLatency", targetLatency),
-		zap.Duration("cpuDuration", latencyStart.Sub(cpuStart)),
-		zap.Duration("latencyDuration", now.Sub(latencyStart)),
-		zap.Duration("totalDuration", now.Sub(cpuStart)))
-}
-
 // ********** EXAMPLE CODE - MUST BE REPLACED **********
-// This function demonstrates how to implement enrichment logic.
-// You MUST replace this with your actual enrichment implementation.
-// The current implementation:
-// 1. Simulates CPU load and latency
-// 2. Returns a mock response
-// DO NOT submit a service that uses this example code!
-func (s *Server) exampleEnrichmentLogic(_ context.Context, request openrtb.EnrichmentRequest) (*openrtb.EnrichmentResponse, error) {
-	// Simulate load (latency and/or CPU)
-	s.simulateLoad()
-
-	// Create response with only allowed fields
-	resp := openrtb.EnrichmentResponse{
-		ID: request.ID, // Preserve the request ID
-		User: &openrtb.EnrichmentUser{
-			Data: []openrtb2.Data{
-				{
-					Name: "segment-provider.com",
-					Segment: []openrtb2.Segment{
-						{ID: "123"},
-					},
-				},
-			},
-			Ext: &openrtb.EnrichmentExt{
-				EIDs: []openrtb2.EID{
-					{
-						Source: "id-provider.com",
-						UIDs: []openrtb2.UID{
-							{ID: "abc"},
-						},
-					},
-				},
-			},
-		},
-	}
-	return &resp, nil
+// This function calls the example enrichment logic.
+func (s *Server) exampleEnrichmentLogic(ctx context.Context, request *openrtb.EnrichmentRequest) (*openrtb.EnrichmentResponse, error) {
+	return s.ExampleEnrichmentLogic(ctx, request)
 }
 
-// logRequest logs the OpenRTB request if it passes the throttling check
-func (s *Server) logRequest(request openrtb.EnrichmentRequest) {
-	// Use random sampling based on the throttle rate
-	if s.rand.Float64() < s.config.RequestLogThrottle {
-		s.logger.Debug("OpenRTB request",
-			zap.String("request_id", request.ID),
-			zap.Any("request", request),
-			zap.String("type", "openrtb_request"),
-		)
-	}
+func (s *Server) logRequestResponse(request *openrtb.EnrichmentRequest, response *openrtb.EnrichmentResponse) {
+	s.logger.Info("OpenRTB request",
+		zap.String("request_id", request.ID),
+		zap.Any("request", request),
+		zap.String("type", "openrtb_request"),
+	)
+	s.logger.Info("Enrichment response",
+		zap.String("request_id", response.ID),
+		zap.Any("response", response),
+		zap.String("type", "openrtb_response"),
+	)
 }
 
 func (s *Server) handleEnrichment(w http.ResponseWriter, r *http.Request) {
@@ -244,8 +166,8 @@ func (s *Server) handleEnrichment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Log the request if it passes throttling
-	s.logRequest(request)
+	// Check if we should log this request/response pair
+	shouldLog := s.config.RequestLogThrottle > 0 && rand.Float64() < s.config.RequestLogThrottle
 
 	// If enrichment is disabled, return 204 No Content
 	if s.config.DisableEnrichment {
@@ -254,17 +176,22 @@ func (s *Server) handleEnrichment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if we need to return 204 No Content
-	if !s.shouldEnrich(request) {
+	if !s.shouldEnrich(&request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
 	// ********** EXAMPLE CODE - MUST BE REPLACED **********
-	response, err := s.exampleEnrichmentLogic(r.Context(), request)
+	response, err := s.exampleEnrichmentLogic(r.Context(), &request)
 	if err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		metrics.EnrichmentRequestErrors.WithLabelValues("enrichment_error").Inc()
 		return
+	}
+
+	// Log both request and response together if throttling check passed
+	if shouldLog {
+		s.logRequestResponse(&request, response)
 	}
 
 	// Set OpenRTB 2.5 headers
@@ -281,7 +208,7 @@ func (s *Server) handleEnrichment(w http.ResponseWriter, r *http.Request) {
 }
 
 // shouldEnrich determines if we need to enrich the request
-func (s *Server) shouldEnrich(request openrtb.EnrichmentRequest) bool {
+func (s *Server) shouldEnrich(request *openrtb.EnrichmentRequest) bool {
 	// TODO: Implement actual enrichment logic
 	// For testing purposes, return false if the request ID contains "no-enrichment"
 	return !strings.Contains(request.ID, "no-enrichment")

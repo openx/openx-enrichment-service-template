@@ -26,7 +26,7 @@ type Config struct {
 	GCSCredentials string // Path to credentials file or "default" for workload identity
 
 	// Logging configuration
-	RequestLogThrottle float64 // Fraction of requests to log (0.0 to 1.0)
+	RequestLogThrottle float64 // Fraction of requests/responses to log (0.0 to 1.0)
 
 	// Service behavior
 	DisableEnrichment bool // If true, always return 204 No Content
@@ -50,7 +50,7 @@ func DefaultConfig() *Config {
 		GCSInboxBucket: "",
 		GCSCredentials: "default", // Default to workload identity
 
-		RequestLogThrottle: 0.0,   // Log no requests by default
+		RequestLogThrottle: 0.0,   // Log no requests/responses by default
 		DisableEnrichment:  false, // By default, perform enrichment
 	}
 }
