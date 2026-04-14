@@ -1,6 +1,6 @@
 package server
 
-// These tests validate basic compliance with the OpenX Hosted RTB Enrichment Services specification.
+// These tests validate basic compliance with the OpenXBuild Enrichment Services specification.
 // See SPECIFICATION.md for the complete API contract and requirements.
 // The tests cover:
 // - HTTP endpoint behavior (/openrtb25, /healthz, /metrics)
@@ -10,12 +10,17 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	agenticv1 "github.com/openx/openx-enrichment-service-template/pkg/gen/com/iabtechlab/bidstream/mutation/v1"
+	agenticsvc "github.com/openx/openx-enrichment-service-template/pkg/gen/com/iabtechlab/bidstream/mutation/services/v1"
+	openrtbv2 "github.com/openx/openx-enrichment-service-template/pkg/gen/com/iabtechlab/openrtb/v2"
 	"github.com/openx/openx-enrichment-service-template/pkg/config"
 	"github.com/openx/openx-enrichment-service-template/pkg/metrics"
 	"github.com/openx/openx-enrichment-service-template/pkg/openrtb"
@@ -24,6 +29,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 func TestServer_HandleEnrichment(t *testing.T) {
@@ -66,6 +73,18 @@ func TestServer_HandleEnrichment(t *testing.T) {
 				assert.NotNil(t, resp.User)
 				assert.NotEmpty(t, resp.User.Data)
 				assert.NotEmpty(t, resp.User.Ext)
+				// Verify deal enrichment is present when impressions are in the request
+				assert.NotNil(t, resp.Imp)
+				assert.Len(t, resp.Imp, 1)
+				assert.NotNil(t, resp.Imp[0].PMP)
+				assert.NotEmpty(t, resp.Imp[0].PMP.Deals)
+				assert.Len(t, resp.Imp[0].PMP.Deals, 2)
+				assert.Equal(t, "OX-qav-NmrU2e", resp.Imp[0].PMP.Deals[0].ID)
+				assert.Equal(t, 0.10, resp.Imp[0].PMP.Deals[0].BidFloor)
+				assert.Equal(t, "USD", resp.Imp[0].PMP.Deals[0].BidFloorCur)
+				assert.Equal(t, "OX-qav-ZrOLsj", resp.Imp[0].PMP.Deals[1].ID)
+				assert.Equal(t, 2.50, resp.Imp[0].PMP.Deals[1].BidFloor)
+				assert.Equal(t, "USD", resp.Imp[0].PMP.Deals[1].BidFloorCur)
 			},
 		},
 		{
@@ -115,7 +134,6 @@ func TestServer_HandleEnrichment(t *testing.T) {
 }
 
 func TestServer_HandleHealth(t *testing.T) {
-	// Setup test server
 	cfg := &config.Config{
 		Port:         8080,
 		ReadTimeout:  5 * time.Second,
@@ -126,13 +144,15 @@ func TestServer_HandleHealth(t *testing.T) {
 	srv, err := New(cfg, logger)
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
-	rr := httptest.NewRecorder()
-
-	srv.handleHealth(rr, req)
-
-	assert.Equal(t, http.StatusOK, rr.Code)
-	assert.Equal(t, "OK", rr.Body.String())
+	for _, path := range []string{"/healthz", "/health/ready", "/health/live"} {
+		t.Run(path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			rr := httptest.NewRecorder()
+			srv.handleHealth(rr, req)
+			assert.Equal(t, http.StatusOK, rr.Code)
+			assert.Equal(t, "OK", rr.Body.String())
+		})
+	}
 }
 
 func TestServer_HandleMetrics(t *testing.T) {
@@ -415,5 +435,129 @@ func TestServer_AnalyzeRequest(t *testing.T) {
 			result := srv.analyzer.AnalyzeRequest(&tt.request)
 			assert.Equal(t, tt.expectedID, result, tt.description)
 		})
+	}
+}
+
+func TestServer_AnalyzeBidRequest_ARTF(t *testing.T) {
+	cfg := &config.Config{
+		Port:         8080,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 5 * time.Second,
+		IdleTimeout:  5 * time.Second,
+	}
+	logger, _ := zap.NewDevelopment()
+	srv, err := New(cfg, logger)
+	require.NoError(t, err)
+
+	ptrStr := func(s string) *string { return &s }
+	ptrInt32 := func(i int32) *int32 { return &i }
+
+	tests := []struct {
+		name        string
+		request     *openrtbv2.BidRequest
+		expectedID  string
+		description string
+	}{
+		{
+			name:        "Base segment for empty request",
+			request:     &openrtbv2.BidRequest{Id: ptrStr("test-id")},
+			expectedID:  "base-segment",
+			description: "Should return base segment when no specific objects are found",
+		},
+		{
+			name:        "Banner detection",
+			request:     &openrtbv2.BidRequest{Id: ptrStr("test-id"), Imp: []*openrtbv2.BidRequest_Imp{{Id: ptrStr("imp1"), Banner: &openrtbv2.BidRequest_Banner{}}}},
+			expectedID:  "banner-detected",
+			description: "Should detect banner objects and return banner-detected",
+		},
+		{
+			name:        "Video detection",
+			request:     &openrtbv2.BidRequest{Id: ptrStr("test-id"), Imp: []*openrtbv2.BidRequest_Imp{{Id: ptrStr("imp1"), Video: &openrtbv2.BidRequest_Video{}}}},
+			expectedID:  "video-detected",
+			description: "Should detect video objects and return video-detected",
+		},
+		{
+			name:        "Mobile device with banner",
+			request:     &openrtbv2.BidRequest{Id: ptrStr("test-id"), Imp: []*openrtbv2.BidRequest_Imp{{Id: ptrStr("imp1"), Banner: &openrtbv2.BidRequest_Banner{}}}, Device: &openrtbv2.BidRequest_Device{Devicetype: ptrInt32(1)}},
+			expectedID:  "banner-detected-mobile",
+			description: "Should detect banner on mobile device and append device type",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := srv.artfAnalyzer.AnalyzeBidRequest(tt.request)
+			assert.Equal(t, tt.expectedID, result, tt.description)
+		})
+	}
+}
+
+func TestServer_GetMutations_ARTF(t *testing.T) {
+	cfg := &config.Config{
+		Port:         8080,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 5 * time.Second,
+		IdleTimeout:  5 * time.Second,
+	}
+	logger, _ := zap.NewDevelopment()
+	srv, err := New(cfg, logger)
+	require.NoError(t, err)
+
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer lis.Close()
+
+	gs := grpc.NewServer()
+	registerRTBExtensionPoint(gs, logger, srv.ExampleARTFEnrichmentLogic)
+	go func() { _ = gs.Serve(lis) }()
+	defer gs.Stop()
+
+	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+	defer conn.Close()
+
+	client := agenticsvc.NewRTBExtensionPointClient(conn)
+	ctx := context.Background()
+
+	ptrStr := func(s string) *string { return &s }
+	req := &agenticv1.RTBRequest{
+		Id: ptrStr("grpc-test-id"),
+		BidRequest: &openrtbv2.BidRequest{
+			Id:  ptrStr("grpc-test-id"),
+			Imp: []*openrtbv2.BidRequest_Imp{{Id: ptrStr("imp1"), Banner: &openrtbv2.BidRequest_Banner{}}},
+		},
+	}
+
+	resp, err := client.GetMutations(ctx, req)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, "grpc-test-id", resp.GetId())
+	require.NotEmpty(t, resp.Mutations)
+
+	// Verify segment mutation uses IAB path format
+	var segmentMutation *agenticv1.Mutation
+	for _, m := range resp.Mutations {
+		if m.GetIntent() == agenticv1.Intent_ACTIVATE_SEGMENTS {
+			segmentMutation = m
+			break
+		}
+	}
+	require.NotNil(t, segmentMutation, "expected ACTIVATE_SEGMENTS mutation")
+	assert.Equal(t, "/user/data/segment", segmentMutation.GetPath())
+	assert.Equal(t, agenticv1.Operation_OPERATION_ADD, segmentMutation.GetOp())
+	assert.NotEmpty(t, segmentMutation.GetIds().GetId())
+
+	// Verify deal floor mutations use IAB path format: /imp/{impId}/pmp/deals/{dealId}
+	var dealMutations []*agenticv1.Mutation
+	for _, m := range resp.Mutations {
+		if m.GetIntent() == agenticv1.Intent_ADJUST_DEAL_FLOOR {
+			dealMutations = append(dealMutations, m)
+		}
+	}
+	require.NotEmpty(t, dealMutations, "expected ADJUST_DEAL_FLOOR mutations")
+	for _, m := range dealMutations {
+		assert.Regexp(t, `^/imp/[^/]+/pmp/deals/[^/]+$`, m.GetPath(), "deal path should be /imp/{impId}/pmp/deals/{dealId}")
+		assert.Equal(t, agenticv1.Operation_OPERATION_REPLACE, m.GetOp())
+		assert.NotNil(t, m.GetAdjustDeal())
 	}
 }

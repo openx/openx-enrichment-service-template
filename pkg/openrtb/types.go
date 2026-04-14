@@ -11,6 +11,18 @@ type EnrichmentRequest = openrtb20.BidRequest
 type EnrichmentResponse struct {
 	ID   string          `json:"id"`
 	User *EnrichmentUser `json:"user,omitempty"`
+	Imp  []EnrichmentImp `json:"imp,omitempty"`
+}
+
+// EnrichmentImp represents the allowed impression fields for enrichment
+type EnrichmentImp struct {
+	ID  string         `json:"id"`
+	PMP *EnrichmentPMP `json:"pmp,omitempty"`
+}
+
+// EnrichmentPMP represents the allowed PMP fields for enrichment
+type EnrichmentPMP struct {
+	Deals []openrtb20.Deal `json:"deals,omitempty"`
 }
 
 // EnrichmentUser represents the allowed user fields for enrichment

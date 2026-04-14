@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -15,14 +16,18 @@ import (
 	"github.com/openx/openx-enrichment-service-template/pkg/storage"
 
 	"go.uber.org/zap"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
+	"google.golang.org/grpc"
 )
 
 // Server represents the HTTP server
 type Server struct {
-	config   *config.Config
-	logger   *zap.Logger
-	gcs      *storage.Client
-	analyzer *RequestAnalyzer
+	config       *config.Config
+	logger       *zap.Logger
+	gcs          *storage.Client
+	analyzer     *RequestAnalyzer
+	artfAnalyzer *ARTFRequestAnalyzer
 }
 
 // New creates a new server instance
@@ -44,10 +49,11 @@ func New(config *config.Config, logger *zap.Logger) (*Server, error) {
 	}
 
 	return &Server{
-		config:   config,
-		logger:   logger,
-		gcs:      gcsClient,
-		analyzer: NewRequestAnalyzer(logger),
+		config:       config,
+		logger:       logger,
+		gcs:          gcsClient,
+		analyzer:     NewRequestAnalyzer(logger),
+		artfAnalyzer: NewARTFRequestAnalyzer(logger),
 	}, nil
 }
 
@@ -69,17 +75,52 @@ func (s *Server) Start() error {
 	// Register handlers
 	mux.HandleFunc("/openrtb25", s.handleEnrichment)
 	mux.HandleFunc("/healthz", s.handleHealth)
+	mux.HandleFunc("/health/live", s.handleHealth)
+	mux.HandleFunc("/health/ready", s.handleHealth)
 	mux.Handle("/metrics", metrics.Handler())
+
+	var handler http.Handler = mux
+	var h2s *http2.Server
+
+	if s.config.EnableHTTP2 {
+		// Configure HTTP/2 cleartext (h2c) with support for both H2C upgrade and H2C prior knowledge
+		h2s = &http2.Server{}
+		handler = h2c.NewHandler(mux, h2s)
+		s.logger.Info("Starting server with HTTP/2 cleartext (H2C) support", zap.Int("port", s.config.Port))
+	} else {
+		s.logger.Info("Starting server with HTTP/1.1", zap.Int("port", s.config.Port))
+	}
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", s.config.Port),
-		Handler:      mux,
+		Handler:      handler,
 		ReadTimeout:  s.config.ReadTimeout,
 		WriteTimeout: s.config.WriteTimeout,
 		IdleTimeout:  s.config.IdleTimeout,
 	}
 
-	s.logger.Info("Starting server", zap.Int("port", s.config.Port))
+	if s.config.EnableHTTP2 {
+		if err := http2.ConfigureServer(server, h2s); err != nil {
+			return fmt.Errorf("failed to configure HTTP/2 support: %w", err)
+		}
+	}
+
+	// Start gRPC server (IAB RTBExtensionPoint) if configured
+	if s.config.GrpcPort > 0 {
+		lis, err := net.Listen("tcp", fmt.Sprintf(":%d", s.config.GrpcPort))
+		if err != nil {
+			return fmt.Errorf("failed to listen for gRPC: %w", err)
+		}
+		gs := grpc.NewServer()
+		registerRTBExtensionPoint(gs, s.logger, s.ExampleARTFEnrichmentLogic)
+		go func() {
+			if err := gs.Serve(lis); err != nil {
+				s.logger.Error("gRPC server failed", zap.Error(err))
+			}
+		}()
+		s.logger.Info("gRPC server listening", zap.Int("port", s.config.GrpcPort))
+	}
+
 	return server.ListenAndServe()
 }
 
@@ -161,6 +202,7 @@ func (s *Server) handleEnrichment(w http.ResponseWriter, r *http.Request) {
 
 	var request openrtb.EnrichmentRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		s.logger.Error("Failed to decode request", zap.Error(err))
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		metrics.EnrichmentRequestErrors.WithLabelValues("invalid_request").Inc()
 		return

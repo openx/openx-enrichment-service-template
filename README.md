@@ -1,13 +1,18 @@
-# OpenX Enrichment Service Template
+# OpenXBuild Enrichment Service Template
 
-This is a reference implementation of an enrichment service that follows the [OpenX BYO Container specification](SPECIFICATION.md). It demonstrates how to implement a containerized enrichment service that can be deployed on OpenX infrastructure.
+This is a reference implementation of an enrichment service for the OpenXBuild platform. It demonstrates two integration paths:
+
+- **OpenXBuild HTTP API** — `POST /openrtb25` receives a JSON OpenRTB 2.5 BidRequest projection and returns enrichments (segments, EIDs, deal floor overrides) as a JSON BidRequest fragment.
+- **IAB ARTF (gRPC)** — `GetMutations` on the [IAB RTBExtensionPoint](https://github.com/IABTechLab/agentic-rtb-framework) service receives an `RTBRequest` (proto) and returns an `RTBResponse` with typed `Mutation` objects.
+
+Most partners implement one path; the OpenX team will confirm which is configured for your deployment. See [SPECIFICATION.md](SPECIFICATION.md) for the full API contract for both paths.
 
 ## Features
 
-- Accepts OpenRTB BidRequest objects at `/openrtb25`
-- Returns mock segments in the response
-- Exposes health check endpoint at `/healthz`
-- Exposes Prometheus metrics at `/metrics`
+- **HTTP API**: Accepts OpenRTB 2.5 BidRequest projections at `POST /openrtb25`
+- **ARTF gRPC**: Implements the IAB `RTBExtensionPoint.GetMutations` RPC
+- Health check at `GET /healthz`, `GET /health/ready`, and `GET /health/live` (at least one of the first two is required for all deployments)
+- Prometheus metrics at `GET /metrics`
 - Follows OpenX's standard patterns for metrics, logging, and configuration
 - Includes a certification suite to validate implementations
 
@@ -43,6 +48,12 @@ These environment variables are used in this example service, for testing and lo
   - Set to 0.01 to log 1% of requests
   - Set to 1.0 to log all requests
   - Set to 0.0 to disable request logging (default)
+
+#### gRPC / ARTF Configuration
+- `GRPC_PORT`: Port for the IAB ARTF `GetMutations` gRPC service (default: disabled). Set to enable the ARTF integration path alongside the HTTP server.
+
+#### HTTP/2 Configuration
+- `ENABLE_HTTP2`: Enable HTTP/2 cleartext (h2c) multiplexing (default: true)
 
 #### Service Behavior
 - `DISABLE_ENRICHMENT`: If set to "true", always return 204 No Content (default: false)
@@ -153,6 +164,30 @@ When deployed to Kubernetes, the service will use workload identity for GCS auth
 ## API Documentation
 
 For a full description of the request/response format, required endpoints, and runtime expectations, see the [OpenX Enrichment Service Specification](SPECIFICATION.md).
+
+## Proto definitions and generated code
+
+This repository implements the IAB [RTBExtensionPoint](https://github.com/IABTechLab/agentic-rtb-framework) interface (`GetMutations(RTBRequest) returns (RTBResponse)`). Proto definitions and generated Go code are included so that the service builds without a protoc/buf toolchain.
+
+### Third-party protos (vendored)
+
+The following proto definitions are copied into this repository under the Apache License 2.0 (or the license specified by the upstream project):
+
+- **[InteractiveAdvertisingBureau/openrtb2.x](https://github.com/InteractiveAdvertisingBureau/openrtb2.x)** — OpenRTB 2.x schema. Used under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0). Copied into `proto/com/iabtechlab/openrtb/v2/`.
+- **[IABTechLab/agentic-rtb-framework](https://github.com/IABTechLab/agentic-rtb-framework)** — RTBExtensionPoint service and RTBRequest/RTBResponse types. Copied into `proto/com/iabtechlab/bidstream/mutation/`. See the upstream repository for license details.
+
+`proto/google/protobuf/struct.proto` is from the Protocol Buffers project (Google).
+
+### Generated code
+
+Generated Go code lives in `pkg/gen/` and is **checked in**. Consumers can depend on this repository’s generated packages and do not compile protos themselves.
+
+To regenerate after changing protos in `proto/`:
+
+1. Install `protoc` and the Go plugins (`protoc-gen-go`, `protoc-gen-go-grpc`). Optionally use [buf](https://buf.build) instead.
+2. From the repo root, run the proto generation (exact command depends on your setup; see `proto/` and any `Makefile` targets such as `make generate` if added).
+3. Ensure generated files under `pkg/gen/` are written with `go_package` (or equivalent) so that import paths match `github.com/openx/openx-enrichment-service-template/pkg/gen/...`.
+4. Run `go mod tidy` and `go mod vendor` (if using vendor), then commit the updated `pkg/gen/` files.
 
 ## Certification Suite
 

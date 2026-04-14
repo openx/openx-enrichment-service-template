@@ -9,6 +9,8 @@ import (
 // Config represents the service configuration
 type Config struct {
 	Port         int
+	GrpcPort     int
+	EnableHTTP2  bool
 	LogLevel     string
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
@@ -36,6 +38,8 @@ type Config struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Port:         8080,
+		GrpcPort:     9090,
+		EnableHTTP2:  true,
 		LogLevel:     "info",
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 5 * time.Second,
@@ -63,6 +67,16 @@ func LoadFromEnv() *Config {
 		if p, err := strconv.Atoi(port); err == nil {
 			config.Port = p
 		}
+	}
+
+	if grpcPort := os.Getenv("GRPC_PORT"); grpcPort != "" {
+		if p, err := strconv.Atoi(grpcPort); err == nil {
+			config.GrpcPort = p
+		}
+	}
+
+	if enableHTTP2 := os.Getenv("ENABLE_HTTP2"); enableHTTP2 != "" {
+		config.EnableHTTP2 = enableHTTP2 == "true"
 	}
 
 	if logLevel := os.Getenv("LOG_LEVEL"); logLevel != "" {

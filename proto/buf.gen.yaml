@@ -1,0 +1,11 @@
+version: v2
+plugins:
+  - remote: buf.build/protocolbuffers/go
+    out: ../..
+  - remote: buf.build/grpc/go
+    out: ../..
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: github.com/openx/openx-enrichment-service-template/pkg/gen

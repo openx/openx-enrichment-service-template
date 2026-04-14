@@ -3,17 +3,28 @@
 | DRAFT: This implementation guide is being shared for feedback and discussion. Based on integration experience and partner input, final requirements and behaviors may change. |
 | :---- |
 
-# Hosted RTB Enrichment Services: API Integration Guide for Partners
+# OpenXBuild Enrichment Services: API Integration Guide for Partners
 
-Welcome to the technical integration guide for **Hosted RTB Enrichment Services**. This document describes how to build real-time enrichment services that integrate into the OpenX Hosted Enrichment Platform to enhance OpenRTB BidRequests before DSP bidding.
+Welcome to the technical integration guide for **OpenXBuild Enrichment Services**. This document describes how to build real-time enrichment services that integrate into OpenXBuild to enhance OpenRTB BidRequests before DSP bidding.
 
 ---
 
 ## **Overview**
 
-The platform enables real-time augmentation of OpenRTB `BidRequest` objects on the OpenX Hosted Enrichment platform, within a secure Kubernetes environment. These services have access to an object store (currently supporting Google Cloud Storage), allowing storage of lookup tables, ML models, or other artifacts used by your service.
+The platform enables real-time augmentation of OpenRTB `BidRequest` objects on OpenXBuild, within a secure Kubernetes environment. These services have access to an object store (currently supporting Google Cloud Storage), allowing storage of lookup tables, ML models, or other artifacts used by your service.
 
 Enriched BidRequests are used internally by the OpenX SSP platform (e.g., to attach segments or apply deal matching logic) before soliciting bids from DSPs.
+
+### Integration Paths
+
+OpenX supports two integration paths. The OpenX team will confirm which is configured for your deployment.
+
+| Path | Protocol | When to use |
+| :---- | :---- | :---- |
+| **OpenXBuild HTTP API** | `POST /openrtb25` (JSON over HTTP/1.1 or H2C) | Standard integration; simpler to implement and test |
+| **IAB ARTF** | `GetMutations` gRPC (protobuf over HTTP/2) | Preferred for compliance with the [IAB Agentic RTB Framework](https://github.com/IABTechLab/agentic-rtb-framework) standard |
+
+Regardless of integration path, all services must expose `GET /healthz` or `GET /health/ready` (either is accepted), and should expose `GET /metrics`.
 
 ## Getting Started
 
@@ -21,7 +32,7 @@ Before integrating your service, and pending privacy review, our support team wi
 
 * Which OpenRTB BidRequest fields will be sent to your service (based on criteria such as country code, device type, etc)
 
-* Which fields will be populated in outbound requests to your enrichment service. This is referred to in this document as a “projection” of the OpenRTB 2.5 BidRequest schema.
+* Which fields will be populated in outbound requests to your enrichment service. This is referred to in this document as a “projection” of the OpenRTB BidRequest schema.
 
 A reference implementation is available at https://github.com/openx/openx-enrichment-service-template
 
@@ -119,6 +130,95 @@ Example Request:
 * Body: A fragment of a `BidRequest`\-compatible object  
 * Additions to the BidRequest object will be validated and merged back into the original `BidRequest`
 
+Enrichment services can return different types of enrichments, each serving a specific intent:
+
+* **Activate Segments**: Attach segment IDs to enable audience targeting
+* **Add Extended Identifier (EID)**: Provide additional user identifiers for identity resolution
+* **Propose Deal Floor Override**: Specify minimum bid floors for deals
+
+##### **Activate Segments**
+
+Use `user.data` to attach segment IDs that can be targeted by deals.
+
+Example Response:
+
+```
+{
+  "id": "<original-request-id>",
+  "user": {
+    "data": [
+      {"name": "segment-provider.com", "segment": [{ "id": "123" }]}
+    ]
+  }
+}
+```
+
+##### **Add Extended Identifier (EID)**
+
+Use `user.ext.eids` to provide additional user identifiers for audience-based targeting.
+
+Example Response:
+
+```
+{
+  "id": "<original-request-id>",
+  "user": {
+    "ext": {
+      "eids": [
+        {"source": "id-provider-2.com", "uids": [{ "id": "abc" }]}
+      ]
+    }
+  }
+}
+```
+
+##### **Propose Deal Floor Override**
+
+Use `imp[].pmp.deals` to propose bid floor overrides for deals.
+
+Each deal object must include:
+
+* `id` (required): The deal's alphanumeric identifier
+* `bidfloor` (required): Minimum bid for this deal expressed in CPM
+* `bidfloorcur` (optional): Currency specified using ISO-4217 alpha codes (default: "USD")
+
+The `id` field must match a deal configured in the OpenX platform, and the floor override will only take effect
+if the request also matches the eligibility criteria of that deal (i.e. it will not append this deal ID to the request
+if it is not otherwise eligible).  It is safe to return deal IDs in cases where you are not sure whether the request
+is eligible.
+
+The `bidfloorcur` field must be set if the deal is not priced in USD, and the currency specified here must match
+the currency on the deal.
+
+The floor will only be adjusted if it is higher than other applicable floors, such as publisher floors and the floor
+price configured on the deal.
+
+Example Response:
+
+```
+{
+  "id": "<original-request-id>",
+  "imp": [
+    {
+      "id": "<impression-id>",
+      "pmp": {
+        "deals": [
+          {
+            "id": "OX-deal-123",
+            "bidfloor": 2.50,
+            "bidfloorcur": "USD"
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+
+##### **Multiple Enrichments**
+
+You can combine multiple enrichment types in a single response. For example, you can activate segments and add extended identifiers together:
+
 Example Response:
 
 ```
@@ -136,11 +236,6 @@ Example Response:
   }
 }
 ```
-
-The fields that you may include in a response are limited to the following paths, unless arranged in advance with OpenX:
-
-* `user.data` (see example above, must follow the OpenRTB 2.5 definition of `Data` objects used for segments, and only the `id` field will be used for targeting)  
-* `user.ext.eids` (see example above, must follow the OpenRTB 2.6 definition of `EID` objects)
 
 ## **HTTP Response Codes**
 
@@ -164,11 +259,11 @@ The fields that you may include in a response are limited to the following paths
 
 ---
 
-## **Hosted Mode (BYO Container)**
+## **OpenXBuild Deployment (BYO Container)**
 
 ### **Runtime Environment**
 
-Enrichment services are hosted on the OpenX platform. Your service runs as a container within a Kubernetes environment:
+Enrichment services are hosted on the OpenXBuild platform. Your service runs as a container within a Kubernetes environment:
 
 * **Container(s) will run as a Kubernetes pod in its own namespace**  
 * **Object store available through the GCS API** (used for loading models, lookup tables, etc)  
@@ -249,6 +344,112 @@ In order of average QPS, from largest to smallest:
 
 ---
 
+---
+
+## **IAB ARTF Integration (gRPC/GetMutations)**
+
+This section describes the gRPC integration path, which implements the [IAB Agentic RTB Framework (ARTF)](https://github.com/IABTechLab/agentic-rtb-framework) `RTBExtensionPoint` service.
+
+### **Service**
+
+```protobuf
+service RTBExtensionPoint {
+  rpc GetMutations (RTBRequest) returns (RTBResponse);
+}
+```
+
+Protocol: gRPC over HTTP/2 (cleartext). The port is assigned by OpenX during deployment configuration.
+
+### **Request**
+
+OpenX sends an `RTBRequest` containing a projection of the OpenRTB BidRequest encoded as IAB proto types. The same field projection rules as the HTTP API apply — only declared fields will be populated.
+
+| Field | Type | Description |
+| :---- | :---- | :---- |
+| `id` | string | Unique request ID assigned by OpenX |
+| `lifecycle` | Lifecycle | Always `LIFECYCLE_PUBLISHER_BID_REQUEST` |
+| `tmax` | int32 | Maximum time in milliseconds OpenX will wait for a response (including network latency) |
+| `bid_request` | BidRequest | OpenRTB BidRequest projection (proto-encoded, using the IAB OpenRTB 2.6 proto schema) |
+| `applicable_intents` | Intent[] | Intents OpenX will process from this service's response; mutations with other intents are ignored |
+
+### **Response**
+
+Return an `RTBResponse` containing zero or more `Mutation` objects. Each mutation specifies an `intent`, an `op`, a semantic `path`, and a typed `value`.
+
+| Field | Type | Description |
+| :---- | :---- | :---- |
+| `id` | string | Must match `RTBRequest.id` |
+| `mutations` | Mutation[] | Proposed changes; may be empty |
+| `metadata` | Metadata | Optional. `api_version` and `model_version` strings for observability |
+
+### **Supported Intents and Paths**
+
+OpenX processes the following mutation intents. Unrecognised intents are ignored.
+
+| Intent | Path | Value type | Description |
+| :---- | :---- | :---- | :---- |
+| `ACTIVATE_SEGMENTS` | `/user/data/segment` | `IDsPayload` | Segment IDs to attach for audience targeting |
+| `ADJUST_DEAL_FLOOR` | `/imp/{impId}/pmp/deals/{dealId}` | `AdjustDealPayload` | Bid floor override for a specific deal on a specific impression |
+
+`{impId}` must match an impression ID present in the request. `{dealId}` must match a deal configured in the OpenX platform (same eligibility rules as the HTTP API apply).
+
+### **Example Request (proto JSON representation)**
+
+```json
+{
+  "id": "req-abc123",
+  "lifecycle": "LIFECYCLE_PUBLISHER_BID_REQUEST",
+  "tmax": 10,
+  "applicableIntents": ["ACTIVATE_SEGMENTS", "ADJUST_DEAL_FLOOR"],
+  "bidRequest": {
+    "id": "req-abc123",
+    "imp": [
+      {"id": "imp1", "banner": {}}
+    ],
+    "device": {"devicetype": 4},
+    "site": {"page": "https://example.com"}
+  }
+}
+```
+
+### **Example Response**
+
+```json
+{
+  "id": "req-abc123",
+  "mutations": [
+    {
+      "intent": "ACTIVATE_SEGMENTS",
+      "op": "OPERATION_ADD",
+      "path": "/user/data/segment",
+      "ids": {"id": ["sports-fan", "premium-user"]}
+    },
+    {
+      "intent": "ADJUST_DEAL_FLOOR",
+      "op": "OPERATION_REPLACE",
+      "path": "/imp/imp1/pmp/deals/OX-deal-456",
+      "adjustDeal": {"bidfloor": 2.50}
+    }
+  ]
+}
+```
+
+### **Health and Metrics**
+
+All services must expose a readiness health check and should expose `GET /metrics` (Prometheus format). These are served on the HTTP port alongside (or instead of) `POST /openrtb25` — no separate health port is required for OpenX-hosted deployments.
+
+OpenX accepts either the OpenX convention or the ARTF convention for health endpoints:
+
+| Endpoint | Description |
+| :---- | :---- |
+| `GET /healthz` | OpenX convention — readiness check (returns `200 OK` when ready) |
+| `GET /health/ready` | ARTF convention — readiness check (returns `200 OK` when ready) |
+| `GET /health/live` | ARTF convention — liveness check (returns `200 OK` when process is alive) |
+
+At minimum, implement `/healthz` **or** `/health/ready`. The reference implementation exposes all three.
+
+---
+
 ## **FAQ**
 
 **Q: What happens if my service exceeds the latency budget?** A: The platform may dynamically shed traffic. Services are expected to be highly performant and stateless.
@@ -257,7 +458,7 @@ In order of average QPS, from largest to smallest:
 
 **Q: Can I use an external datastore?** A: Only the provided object store is supported for hosted services. This is both a performance and security consideration. If your service requires outbound network access (for example, to look up decryption keys for an encrypted user identifier), this must be specified in advance when we configure your enrichment service.
 
-**Q: What OpenRTB version is supported?** A: OpenRTB 2.5. Compatibility with later versions may be added in the future.
+**Q: What OpenRTB version is supported?** A: The HTTP API (`POST /openrtb25`) uses OpenRTB 2.5 field names and types. The ARTF gRPC path uses the IAB OpenRTB 2.6 proto schema — field names and locations may differ slightly from 2.5 JSON.
 
 ---
 

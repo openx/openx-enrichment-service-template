@@ -72,3 +72,114 @@ func TestEnrichmentResponse(t *testing.T) {
 	assert.Len(t, unmarshaled.User.Data[0].Segment, 1)
 	assert.Equal(t, response.User.Data[0].Segment[0].ID, unmarshaled.User.Data[0].Segment[0].ID)
 }
+
+func TestEnrichmentResponseWithDealEnrichment(t *testing.T) {
+	response := EnrichmentResponse{
+		ID: "test-id",
+		Imp: []EnrichmentImp{
+			{
+				ID: "imp1",
+				PMP: &EnrichmentPMP{
+					Deals: []openrtb2.Deal{
+						{
+							ID:          "deal-123",
+							BidFloor:    2.50,
+							BidFloorCur: "USD",
+						},
+						{
+							ID:          "deal-456",
+							BidFloor:    3.00,
+							BidFloorCur: "EUR",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	data, err := json.Marshal(response)
+	assert.NoError(t, err)
+
+	var unmarshaled EnrichmentResponse
+	err = json.Unmarshal(data, &unmarshaled)
+	assert.NoError(t, err)
+	assert.Equal(t, response.ID, unmarshaled.ID)
+	assert.NotNil(t, unmarshaled.Imp)
+	assert.Len(t, unmarshaled.Imp, 1)
+	assert.Equal(t, response.Imp[0].ID, unmarshaled.Imp[0].ID)
+	assert.NotNil(t, unmarshaled.Imp[0].PMP)
+	assert.Len(t, unmarshaled.Imp[0].PMP.Deals, 2)
+	assert.Equal(t, response.Imp[0].PMP.Deals[0].ID, unmarshaled.Imp[0].PMP.Deals[0].ID)
+	assert.Equal(t, response.Imp[0].PMP.Deals[0].BidFloor, unmarshaled.Imp[0].PMP.Deals[0].BidFloor)
+	assert.Equal(t, response.Imp[0].PMP.Deals[0].BidFloorCur, unmarshaled.Imp[0].PMP.Deals[0].BidFloorCur)
+	assert.Equal(t, response.Imp[0].PMP.Deals[1].ID, unmarshaled.Imp[0].PMP.Deals[1].ID)
+	assert.Equal(t, response.Imp[0].PMP.Deals[1].BidFloor, unmarshaled.Imp[0].PMP.Deals[1].BidFloor)
+	assert.Equal(t, response.Imp[0].PMP.Deals[1].BidFloorCur, unmarshaled.Imp[0].PMP.Deals[1].BidFloorCur)
+}
+
+func TestEnrichmentResponseWithMultipleEnrichments(t *testing.T) {
+	// Test response with segments, EIDs, and deal enrichment
+	response := EnrichmentResponse{
+		ID: "test-id",
+		User: &EnrichmentUser{
+			Data: []openrtb2.Data{
+				{
+					Name: "segment-provider.com",
+					Segment: []openrtb2.Segment{
+						{ID: "123"},
+					},
+				},
+			},
+			Ext: &EnrichmentExt{
+				EIDs: []openrtb2.EID{
+					{
+						Source: "id-provider.com",
+						UIDs: []openrtb2.UID{
+							{ID: "abc"},
+						},
+					},
+				},
+			},
+		},
+		Imp: []EnrichmentImp{
+			{
+				ID: "imp1",
+				PMP: &EnrichmentPMP{
+					Deals: []openrtb2.Deal{
+						{
+							ID:          "deal-123",
+							BidFloor:    2.50,
+							BidFloorCur: "USD",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	data, err := json.Marshal(response)
+	assert.NoError(t, err)
+
+	var unmarshaled EnrichmentResponse
+	err = json.Unmarshal(data, &unmarshaled)
+	assert.NoError(t, err)
+	assert.Equal(t, response.ID, unmarshaled.ID)
+
+	// Verify user enrichment
+	assert.NotNil(t, unmarshaled.User)
+	assert.Len(t, unmarshaled.User.Data, 1)
+	assert.Len(t, unmarshaled.User.Data[0].Segment, 1)
+	assert.Equal(t, "123", unmarshaled.User.Data[0].Segment[0].ID)
+	assert.NotNil(t, unmarshaled.User.Ext)
+	assert.Len(t, unmarshaled.User.Ext.EIDs, 1)
+	assert.Equal(t, "id-provider.com", unmarshaled.User.Ext.EIDs[0].Source)
+
+	// Verify deal enrichment
+	assert.NotNil(t, unmarshaled.Imp)
+	assert.Len(t, unmarshaled.Imp, 1)
+	assert.NotNil(t, unmarshaled.Imp[0].PMP)
+	assert.Len(t, unmarshaled.Imp[0].PMP.Deals, 1)
+	assert.Equal(t, "deal-123", unmarshaled.Imp[0].PMP.Deals[0].ID)
+	assert.Equal(t, 2.50, unmarshaled.Imp[0].PMP.Deals[0].BidFloor)
+	assert.Equal(t, "USD", unmarshaled.Imp[0].PMP.Deals[0].BidFloorCur)
+}
