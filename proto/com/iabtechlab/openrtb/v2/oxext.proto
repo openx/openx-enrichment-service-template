@@ -1,0 +1,18 @@
+edition = "2023";
+
+package com.iabtechlab.openrtb.v2;
+import "com/iabtechlab/openrtb/v2/openrtb.proto";
+
+extend BidRequest.Imp.Ext {
+  OxImpExtData data = 4000;  // OpenX range: 4000–4999
+}
+
+message OxImpExtData {
+  string pbadslot = 1;
+  repeated CustomData customdata = 2;
+
+  message CustomData {
+    string provider = 1;
+    string value = 2;
+  }
+}

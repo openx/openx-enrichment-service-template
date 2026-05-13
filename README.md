@@ -182,12 +182,13 @@ The following proto definitions are copied into this repository under the Apache
 
 Generated Go code lives in `pkg/gen/` and is **checked in**. Consumers can depend on this repository’s generated packages and do not compile protos themselves.
 
-To regenerate after changing protos in `proto/`:
+If you modify the protos in `proto/`, you can regenerate with:
 
-1. Install `protoc` and the Go plugins (`protoc-gen-go`, `protoc-gen-go-grpc`). Optionally use [buf](https://buf.build) instead.
-2. From the repo root, run the proto generation (exact command depends on your setup; see `proto/` and any `Makefile` targets such as `make generate` if added).
-3. Ensure generated files under `pkg/gen/` are written with `go_package` (or equivalent) so that import paths match `github.com/openx/openx-enrichment-service-template/pkg/gen/...`.
-4. Run `go mod tidy` and `go mod vendor` (if using vendor), then commit the updated `pkg/gen/` files.
+```bash
+make proto
+```
+
+This requires `protoc`, `protoc-gen-go`, and `protoc-gen-go-grpc`. The Makefile target encodes the full command including output paths and import mappings. After regenerating, commit the updated files under `pkg/gen/`.
 
 ## Certification Suite
 

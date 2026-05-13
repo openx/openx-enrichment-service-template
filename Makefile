@@ -1,4 +1,4 @@
-.PHONY: build test docker clean cert cert-local cert-remote stop-service
+.PHONY: build test docker clean cert cert-local cert-remote stop-service proto
 
 # Variables
 BINARY_NAME=server
@@ -65,6 +65,34 @@ fmt:
 # Run linter
 lint:
 	go vet ./...
+
+# Regenerate protobuf Go code from proto/ sources.
+# Requires: protoc v6.32.0, protoc-gen-go v1.36.9, protoc-gen-go-grpc v1.5.1
+PROTO_ROOT    := proto
+PROTO_OUT     := pkg/gen
+MODULE        := github.com/openx/openx-enrichment-service-template
+PROTO_OPENRTB := com/iabtechlab/openrtb/v2/openrtb.proto
+PROTO_ARTF    := com/iabtechlab/bidstream/mutation/v1/agenticrtbframework.proto
+PROTO_SVC     := com/iabtechlab/bidstream/mutation/services/v1/agenticrtbframeworkservices.proto
+PROTO_OXEXT   := com/iabtechlab/openrtb/v2/oxext.proto
+
+GO_OPT := --go_opt=paths=source_relative \
+	--go_opt=M$(PROTO_OPENRTB)=$(MODULE)/$(PROTO_OUT)/com/iabtechlab/openrtb/v2 \
+	--go_opt=M$(PROTO_OXEXT)=$(MODULE)/$(PROTO_OUT)/com/iabtechlab/openrtb/v2 \
+	--go_opt=M$(PROTO_ARTF)=$(MODULE)/$(PROTO_OUT)/com/iabtechlab/bidstream/mutation/v1 \
+	--go_opt=M$(PROTO_SVC)=$(MODULE)/$(PROTO_OUT)/com/iabtechlab/bidstream/mutation/services/v1
+
+GRPC_OPT := --go-grpc_opt=paths=source_relative \
+	--go-grpc_opt=M$(PROTO_OPENRTB)=$(MODULE)/$(PROTO_OUT)/com/iabtechlab/openrtb/v2 \
+	--go-grpc_opt=M$(PROTO_OXEXT)=$(MODULE)/$(PROTO_OUT)/com/iabtechlab/openrtb/v2 \
+	--go-grpc_opt=M$(PROTO_ARTF)=$(MODULE)/$(PROTO_OUT)/com/iabtechlab/bidstream/mutation/v1 \
+	--go-grpc_opt=M$(PROTO_SVC)=$(MODULE)/$(PROTO_OUT)/com/iabtechlab/bidstream/mutation/services/v1
+
+proto:
+	protoc -I $(PROTO_ROOT) \
+		--go_out=$(PROTO_OUT) $(GO_OPT) \
+		--go-grpc_out=$(PROTO_OUT) $(GRPC_OPT) \
+		$(PROTO_OPENRTB) $(PROTO_OXEXT) $(PROTO_ARTF) $(PROTO_SVC)
 
 # Install dependencies
 deps:
